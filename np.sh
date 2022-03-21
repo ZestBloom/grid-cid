@@ -1,5 +1,5 @@
-export REACH_VERSION=402c3faa # v0.1.9-rc2
-API_ENDPOINT_TESTNET="https://algoapiv1.herokuapp.com"
+export REACH_VERSION=78dbf873 # v0.1.9-rc4
+API_ENDPOINT_TESTNET="http://localhost:5001"
 TEMPLATE_NAME="lite"
 update() {
   # download latest script
