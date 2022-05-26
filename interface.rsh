@@ -12,28 +12,59 @@ export const Participants = () => [
     getParams: Fun(
       [],
       Object({
-        app: Bytes(32),
+        app: Bytes(46),
       })
     ),
   }),
-  Participant("Relay", {})
+  Participant("Relay", {}),
 ];
 export const Views = () => [
   View({
-    app: Bytes(32)
+    app: Bytes(46),
+  }),
+];
+export const Api = () => [
+  API({
+    update: Fun([Bytes(46)], Null),
+    destroy: Fun([], Null)
   })
 ];
-export const Api = () => [];
 export const App = (map) => {
-  const [[Manager, Relay], [v], _] = map;
+  const [[_, _, addr], [Manager, Relay], [v], [a]] = map;
   Manager.only(() => {
-    const { app } = declassify(interact.getParams())
-  })
+    const { app } = declassify(interact.getParams());
+    assume(this == addr);
+  });
   Manager.publish(app);
+  require(Manager == addr);
   v.app.set(app);
   Relay.set(Manager);
+  const [keepGoing, cid] = parallelReduce([true, app])
+  .define(() => {
+    v.app.set(cid);
+  })
+  .invariant(balance() >= 0)
+  .while(keepGoing)
+  .api(a.destroy,
+    () => assume(true),
+    () => 0,
+    (k) => {
+      require(true);
+      k(null);
+      return [false, cid];
+    })
+    .api(a.update,
+      (_) => assume(true),
+      (_) => 0,
+      (m, k) => {
+        require(true);
+        k(null);
+        return [true, m];
+      })
+  .timeout(false);
   commit();
   Relay.publish();
+  transfer(balance()).to(Relay);
   commit();
   exit();
 };
