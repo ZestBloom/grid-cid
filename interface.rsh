@@ -21,13 +21,16 @@ export const Participants = () => [
 export const Views = () => [
   View({
     app: Bytes(46),
+    count: UInt,
   }),
 ];
 export const Api = () => [
   API({
     update: Fun([Bytes(46)], Null),
-    destroy: Fun([], Null)
-  })
+    //destroy: Fun([], Null),
+    incr: Fun([], Null),
+    reset: Fun([], Null),
+  }),
 ];
 export const App = (map) => {
   const [[_, _, addr], [Manager, Relay], [v], [a]] = map;
@@ -38,30 +41,58 @@ export const App = (map) => {
   Manager.publish(app);
   require(Manager == addr);
   v.app.set(app);
+  v.count.set(0);
   Relay.set(Manager);
-  const [keepGoing, cid] = parallelReduce([true, app])
-  .define(() => {
-    v.app.set(cid);
-  })
-  .invariant(balance() >= 0)
-  .while(keepGoing)
-  .api(a.destroy,
-    () => assume(true),
-    () => 0,
-    (k) => {
-      require(true);
-      k(null);
-      return [false, cid];
+  const [keepGoing, cid, as] = parallelReduce([true, app, 0])
+    .define(() => {
+      v.app.set(cid);
+      v.count.set(as);
     })
-    .api(a.update,
-      (_) => assume(true),
-      (_) => 0,
-      (m, k) => {
+    .invariant(balance() >= 0)
+    .while(keepGoing)
+    /*
+    .api(
+      a.destroy,
+      () => assume(this === Manager),
+      () => 0,
+      (k) => {
         require(true);
         k(null);
-        return [true, m];
-      })
-  .timeout(false);
+        return [true, cid, as];
+      }
+    )
+    */
+    .api(
+      a.update,
+      (_) => assume(this == Manager),
+      (_) => 0,
+      (m, k) => {
+        require(this == Manager);
+        k(null);
+        return [true, m, as];
+      }
+    )
+    .api(
+      a.incr,
+      () => assume(true),
+      () => 0,
+      (k) => {
+        require(true);
+        k(null);
+        return [true, cid, as + 1];
+      }
+    )
+    .api(
+      a.reset,
+      () => assume(this == Manager),
+      () => 0,
+      (k) => {
+        require(this == Manager);
+        k(null);
+        return [true, cid, 0];
+      }
+    )
+    .timeout(false);
   commit();
   Relay.publish();
   transfer(balance()).to(Relay);
