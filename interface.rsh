@@ -22,6 +22,7 @@ export const Views = () => [
   View({
     app: Bytes(46),
     count: UInt,
+    // TODO add manager
   }),
 ];
 export const Api = () => [
