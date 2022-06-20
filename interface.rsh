@@ -7,70 +7,76 @@
 // Version: 0.0.2 - initial
 // Requires Reach v0.1.7 (stable)
 // ----------------------------------------------
+export const Event = () => [];
 export const Participants = () => [
   Participant("Manager", {
     getParams: Fun(
       [],
       Object({
-        app: Bytes(46),
+        app: Bytes(46), // cidv0
       })
     ),
-  }),
-  Participant("Relay", {}),
+  })
 ];
 export const Views = () => [
   View({
+    manager: Address,
     app: Bytes(46),
     count: UInt,
-    // TODO add manager
   }),
 ];
 export const Api = () => [
   API({
     update: Fun([Bytes(46)], Null),
-    //destroy: Fun([], Null),
     incr: Fun([], Null),
     reset: Fun([], Null),
+    grant: Fun([Address], Null),
   }),
 ];
 export const App = (map) => {
-  const [[_, _, addr], [Manager, Relay], [v], [a]] = map;
+  const [{ amt, ttl }, [addr, _], [Manager], [v], [a], _] = map;
   Manager.only(() => {
     const { app } = declassify(interact.getParams());
-    assume(this == addr);
+    assume(true);
   });
-  Manager.publish(app);
-  require(Manager == addr);
+  Manager.publish(app)
+    .pay(amt)
+    .timeout(relativeTime(ttl), () => {
+      Anybody.publish();
+      commit();
+      exit();
+    });
+  require(true);
+  transfer(amt).to(addr);
+  v.manager.set(Manager);
   v.app.set(app);
   v.count.set(0);
-  Relay.set(Manager);
-  const [keepGoing, cid, as] = parallelReduce([true, app, 0])
+  const [keepGoing, cid, as, man] = parallelReduce([true, app, 0, Manager])
     .define(() => {
+      v.manager.set(man);
       v.app.set(cid);
       v.count.set(as);
     })
     .invariant(balance() >= 0)
     .while(keepGoing)
-    /*
     .api(
-      a.destroy,
-      () => assume(this === Manager),
-      () => 0,
-      (k) => {
-        require(true);
-        k(null);
-        return [true, cid, as];
-      }
-    )
-    */
-    .api(
-      a.update,
-      (_) => assume(this == Manager),
+      a.grant,
+      (_) => assume(this == man),
       (_) => 0,
       (m, k) => {
-        require(this == Manager);
+        require(this == man);
         k(null);
-        return [true, m, as];
+        return [true, cid, as, m];
+      }
+    )
+    .api(
+      a.update,
+      (_) => assume(this == man),
+      (_) => 0,
+      (m, k) => {
+        require(this == man);
+        k(null);
+        return [true, m, as, man];
       }
     )
     .api(
@@ -80,23 +86,24 @@ export const App = (map) => {
       (k) => {
         require(true);
         k(null);
-        return [true, cid, as + 1];
+        return [true, cid, as + 1, man];
       }
     )
     .api(
       a.reset,
-      () => assume(this == Manager),
+      () => assume(this == man),
       () => 0,
       (k) => {
-        require(this == Manager);
+        require(this == man);
         k(null);
-        return [true, cid, 0];
+        return [true, cid, 0, man];
       }
     )
     .timeout(false);
   commit();
-  Relay.publish();
-  transfer(balance()).to(Relay);
+  // Impossible
+  Anybody.publish();
+  transfer(balance()).to(addr);
   commit();
   exit();
 };
